@@ -29,9 +29,9 @@ rm -f "$AMALGAMATION.zip"
 # update crate version
 CRATE_VERSION="1.${SQLITE_VERSION:1}.0"
 CRATE_SHORT_VERSION="1.${SQLITE_VERSION:1}"
-sed -i -E "s/^version = \"1\.[0-9]+\.0\"$/version = \"$CRATE_VERSION\"/" \
+sed -i -E "s/^version = \"1\.[0-9]+\.[0-9]+\"$/version = \"$CRATE_VERSION\"/" \
   $SCRIPT_DIR/Cargo.toml
-sed -i -E "s/^libsqlite3-hotbundle = \"1.[0-9]+\"$/libsqlite3-hotbundle = \"1.$CRATE_SHORT_VERSION\"" \
+sed -i -E "s/^libsqlite3-hotbundle = \"1.[0-9]+\"$/libsqlite3-hotbundle = \"$CRATE_SHORT_VERSION\"/" \
   $SCRIPT_DIR/README.md
 
 # preview and confirm changes
