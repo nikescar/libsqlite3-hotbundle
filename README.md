@@ -11,7 +11,7 @@ then be chosen instead of the system's sqlite3 library or the version of the
 sqlite3 library that `libsqlite3-sys` would have bundled.
 
 ```toml
-libsqlite3-hotbundle = "1.490200"
+libsqlite3-hotbundle = "1.500000"
 rusqlite = "0.35"
 ```
 
