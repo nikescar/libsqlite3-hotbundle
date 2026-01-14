@@ -1,6 +1,6 @@
 [package]
 name = "libsqlite3-hotbundle"
-version = "1.510100.0"
+version = "1.510200.0"
 authors = [
     "Kent Ross",
     "The rusqlite developers",
