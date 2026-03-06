@@ -1,6 +1,6 @@
 [package]
 name = "libsqlite3-hotbundle"
-version = "1.510200.0"
+version = "1.520000.0"
 authors = [
     "Kent Ross",
     "The rusqlite developers",
@@ -28,4 +28,4 @@ with-asan = []
 cc = { version = "1.2.27" }
 
 [dev-dependencies]
-rusqlite = "0.36.0"
+rusqlite = "0.38.0"
