@@ -1,0 +1,9 @@
+[target.wasm32-wasip1]
+runner = "wasmtime run --dir=. --"
+
+[target.wasm32-wasi]
+runner = "wasmtime run --dir=. --"
+
+[env]
+CC_wasm32_wasip1 = "/home/wj/wasi-sdk/bin/clang"
+AR_wasm32_wasip1 = "/home/wj/wasi-sdk/bin/llvm-ar"

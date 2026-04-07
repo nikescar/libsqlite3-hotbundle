@@ -26,13 +26,23 @@ fn is_compiler(compiler_name: &str) -> bool {
 
 fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
-    let lib_name = "sqlite3";
+    let lib_name = "sqlite3"; // Must be "sqlite3" for hotbundle to work
 
-    println!("cargo:include={}/{lib_name}", env!("CARGO_MANIFEST_DIR"));
-    println!("cargo:rerun-if-changed={lib_name}/sqlite3.c");
-    println!("cargo:rerun-if-changed=sqlite3/wasm32-wasi-vfs.c");
+    let src_dir = "sqlite3";
+
+    println!("cargo:include={}/{src_dir}", env!("CARGO_MANIFEST_DIR"));
+    println!("cargo:rerun-if-changed={src_dir}/sqlite3mc.c");
+    println!("cargo:rerun-if-changed={src_dir}/sqlite3patched.c");
+    println!("cargo:rerun-if-changed={src_dir}/wasm32-wasi-vfs.c");
+
     let mut cfg = cc::Build::new();
-    cfg.file(format!("{lib_name}/sqlite3.c"))
+    cfg.file(format!("{src_dir}/sqlite3mc.c"))
+        .include(format!("{src_dir}"))
+        .include(format!("{src_dir}/aegis/include"))
+        .include(format!("{src_dir}/aegis/common"))
+        .include(format!("{src_dir}/ascon"))
+        .include(format!("{src_dir}/argon2/include"))
+        .include(format!("{src_dir}/argon2/src"))
         .flag("-DSQLITE_CORE")
         .flag("-DSQLITE_DEFAULT_FOREIGN_KEYS=1")
         .flag("-DSQLITE_ENABLE_API_ARMOR")
@@ -40,19 +50,47 @@ fn main() {
         .flag("-DSQLITE_ENABLE_DBSTAT_VTAB")
         .flag("-DSQLITE_ENABLE_FTS3")
         .flag("-DSQLITE_ENABLE_FTS3_PARENTHESIS")
+        .flag("-DSQLITE_ENABLE_FTS4")
         .flag("-DSQLITE_ENABLE_FTS5")
         .flag("-DSQLITE_ENABLE_JSON1")
         .flag("-DSQLITE_ENABLE_LOAD_EXTENSION=1")
         .flag("-DSQLITE_ENABLE_MEMORY_MANAGEMENT")
         .flag("-DSQLITE_ENABLE_RTREE")
+        .flag("-DSQLITE_ENABLE_GEOPOLY")
         .flag("-DSQLITE_ENABLE_STAT4")
         .flag("-DSQLITE_SOUNDEX")
         .flag("-DSQLITE_THREADSAFE=1")
         .flag("-DSQLITE_USE_URI")
+        .flag("-DSQLITE_TEMP_STORE=2")
         .flag("-DHAVE_USLEEP=1")
         .flag("-DHAVE_ISNAN")
         .flag("-D_POSIX_THREAD_SAFE_FUNCTIONS") // cross compile with MinGW
         .warnings(false);
+
+    // SQLite3MultipleCiphers: Select default cipher based on features
+    let default_cipher = if cfg!(feature = "cipher-aes128") {
+        "CODEC_TYPE_AES128"
+    } else if cfg!(feature = "cipher-aes256") {
+        "CODEC_TYPE_AES256"
+    } else if cfg!(feature = "cipher-sqlcipher") {
+        "CODEC_TYPE_SQLCIPHER"
+    } else if cfg!(feature = "cipher-ascon") {
+        "CODEC_TYPE_ASCON128"
+    } else if cfg!(feature = "cipher-aegis") {
+        "CODEC_TYPE_AEGIS"
+    } else {
+        // Default to ChaCha20
+        "CODEC_TYPE_CHACHA20"
+    };
+
+    cfg.flag(format!("-DCODEC_TYPE={default_cipher}"))
+        .flag("-DHAVE_CIPHER_AES_128_CBC=1")
+        .flag("-DHAVE_CIPHER_AES_256_CBC=1")
+        .flag("-DHAVE_CIPHER_CHACHA20=1")
+        .flag("-DHAVE_CIPHER_SQLCIPHER=1")
+        .flag("-DHAVE_CIPHER_RC4=1")
+        .flag("-DHAVE_CIPHER_ASCON128=1")
+        .flag("-DHAVE_CIPHER_AEGIS=1");
 
     if cfg!(feature = "double-quoted-string-literals") {
         cfg.flag("-DSQLITE_DQS=1");
@@ -63,8 +101,10 @@ fn main() {
     // on android sqlite can't figure out where to put the temp files.
     // the bundled sqlite on android also uses `SQLITE_TEMP_STORE=3`.
     // https://android.googlesource.com/platform/external/sqlite/+/2c8c9ae3b7e6f340a19a0001c2a889a211c9d8b2/dist/Android.mk
+    // For SQLite3MultipleCiphers, we also disable AES hardware support on Android
     if android_target() {
         cfg.flag("-DSQLITE_TEMP_STORE=3");
+        cfg.flag("-DSQLITE3MC_OMIT_AES_HARDWARE_SUPPORT=1");
     }
 
     if cfg!(feature = "with-asan") {
@@ -88,11 +128,24 @@ fn main() {
             .flag("-D_WASI_EMULATED_MMAN")
             .flag("-D_WASI_EMULATED_GETPID")
             .flag("-D_WASI_EMULATED_SIGNAL")
-            .flag("-D_WASI_EMULATED_PROCESS_CLOCKS");
+            .flag("-D_WASI_EMULATED_PROCESS_CLOCKS")
+            // Enable emulated pthread for argon2 (encryption key derivation)
+            .flag("-D_WASI_EMULATED_PTHREAD")
+            // Tell SQLite3MultipleCiphers we're on WASM
+            .flag("-D__WASM__")
+            // Include our pthread compatibility header
+            .flag("-include")
+            .flag("sqlite3/wasi-pthread-compat.h");
 
         if cfg!(feature = "wasm32-wasi-vfs") {
             cfg.file("sqlite3/wasm32-wasi-vfs.c");
         }
+
+        // Add WASI helpers (provides getentropy() and pthread_exit())
+        cfg.file("sqlite3/wasi-helpers.c");
+
+        // Note: wasi-emulated-pthread not needed for cdylib builds
+        // Our wasi-helpers.c provides the necessary pthread stubs
     }
     if cfg!(feature = "unlock_notify") {
         cfg.flag("-DSQLITE_ENABLE_UNLOCK_NOTIFY");
@@ -102,6 +155,7 @@ fn main() {
     }
     if cfg!(feature = "session") {
         cfg.flag("-DSQLITE_ENABLE_SESSION");
+        cfg.flag("-DSQLITE_ENABLE_PREUPDATE_HOOK");
     }
 
     if let Ok(limit) = env::var("SQLITE_MAX_VARIABLE_NUMBER") {
@@ -135,4 +189,14 @@ fn main() {
     cfg.compile(lib_name);
 
     println!("cargo:lib_dir={out_dir}");
+
+    // Provide metadata about SQLite3MultipleCiphers
+    println!("cargo:rustc-cfg=sqlite3mc");
+
+    // For WASM cdylib builds: prevent linker from stripping C code in release mode
+    if env::var("TARGET").is_ok_and(|v| v.starts_with("wasm32-wasi")) {
+        // Tell the linker to export all symbols from the static library
+        println!("cargo:rustc-link-arg=--export-all");
+        println!("cargo:rustc-link-arg=--no-gc-sections");
+    }
 }

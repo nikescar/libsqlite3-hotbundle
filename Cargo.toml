@@ -12,6 +12,9 @@ license = "MIT"
 build = "build.rs"
 keywords = ["sqlite", "ffi"]
 
+[lib]
+crate-type = ["rlib", "staticlib", "cdylib"]
+
 [features]
 default = []
 
@@ -24,8 +27,20 @@ session = []
 wasm32-wasi-vfs = []
 with-asan = []
 
+# SQLite3MultipleCiphers: Default cipher selection (mutually exclusive)
+# If none specified, ChaCha20 is used as default
+cipher-aes128 = []
+cipher-aes256 = []
+cipher-sqlcipher = []
+cipher-ascon = []
+cipher-aegis = []
+# ChaCha20 is the default - no feature flag needed
+
 [build-dependencies]
 cc = { version = "1.2.27" }
 
 [dev-dependencies]
 rusqlite = "0.38.0"
+
+[workspace]
+# This prevents the package from being part of the parent workspace
