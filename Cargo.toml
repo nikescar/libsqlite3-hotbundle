@@ -44,3 +44,4 @@ rusqlite = "0.38.0"
 
 [workspace]
 # This prevents the package from being part of the parent workspace
+exclude = ["examples/diesel_demo"]

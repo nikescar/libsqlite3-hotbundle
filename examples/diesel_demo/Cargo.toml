@@ -1,0 +1,18 @@
+[package]
+name = "diesel_hotbundle_demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# 1. Standard Diesel setup with sqlite features
+diesel = { version = "2.2.0", features = ["sqlite", "r2d2", "returning_clauses_for_sqlite_3_35"] }
+
+# 2. Force libsqlite3-sys NOT to bundle, ensuring it looks for external symbols
+libsqlite3-sys = { version = "0.30.0", default-features = false }
+
+# 3. Add hotbundle to act as the provider of those C symbols
+libsqlite3-hotbundle = { path = "../..", default-features = false }
+
+[dev-dependencies]
+# For testing
+tempfile = "3.8"
